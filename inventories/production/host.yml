@@ -1,0 +1,10 @@
+---
+all:
+  children:
+    application:
+      hosts:
+        primary.turalt.com:
+  vars:
+    ansible_become_method: su
+    running_locally: false
+    redis_sentinel_enabled: false
