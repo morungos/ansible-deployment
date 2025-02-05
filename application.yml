@@ -1,0 +1,189 @@
+---
+- hosts: localhost
+  roles:
+    - { role: build, tags: ['application'] }
+
+- hosts: application
+  become: True
+  tasks:
+    - setup:
+        gather_subset: 'network,virtual'
+
+## A health check playbook might work well, here, making sure that all the pieces are
+## currently up and running. 
+##
+## The broad approach is set out in: https://docs.ansible.com/ansible/latest/scenario_guides/guide_rolling_upgrade.html
+## 
+## Essentially it involves using serial: 1, along with pre_tasks and post_tasks to temporarily
+## drop a host from the tag, which will remove it from the load balancer.
+##
+## The running_locally flag is something we can set for Virtualbox. 
+
+- hosts: application
+  become: True
+  serial: 1
+
+  pre_tasks:
+
+    - name: test if intrusion detection is installed
+      shell: dpkg-query -W "samhain" 2>/dev/null
+      register: samhain_installed
+      failed_when: false
+      changed_when: false
+
+    - name: stop the intrusion detection if installed
+      service:
+        name: samhain
+        state: stopped
+      when: 
+        - samhain_installed.rc == 0
+
+    - name: find all load balancers
+      uri:
+        url: "https://api.digitalocean.com/v2/load_balancers"
+        method: GET
+        return_content: yes
+        status_code: 200
+        headers:
+            Authorization: "Bearer {{digital_ocean_api_key}}"
+        body_format: json
+      register: all_load_balancers
+      until: all_load_balancers.status == 200
+      retries: 12
+      delay: 10
+      when: 
+        - load_balancer_name is defined
+        - not running_locally
+
+    - name: filter the lists to find the load balancer
+      set_fact: 
+        load_balancers: "{{ all_load_balancers.json.load_balancers | selectattr('name', 'equalto', load_balancer_name) | list }}"
+      when: 
+        - load_balancer_name is defined
+        - not running_locally
+
+    - name: get the droplet id from the metadata service
+      uri:
+        url: 'http://169.254.169.254/metadata/v1/id'
+        method: GET
+        return_content: yes
+        status_code: 200
+      register: droplet_id
+      until: droplet_id.status == 200
+      retries: 12
+      delay: 10
+      when: 
+        - not running_locally
+
+    - debug:
+        msg: "Removing {{droplet_id.content}} from {{load_balancers[0].name}}"
+      when: 
+        - not running_locally
+        - droplet_id.content|length > 0
+        - load_balancers is defined
+        - load_balancers|length > 0
+
+    - name: remove droplet from the load balancer
+      uri: 
+        url: "https://api.digitalocean.com/v2/load_balancers/{{load_balancers[0].id}}/droplets"
+        method: DELETE
+        return_content: yes
+        status_code: 204
+        headers:
+            Authorization: "Bearer {{digital_ocean_api_key}}"
+        body_format: json
+        body: '{"droplet_ids": [ {{droplet_id.content}} ]}'
+      register: remove_status
+      until: remove_status.status == 204
+      retries: 12
+      delay: 10
+      when: 
+        - not running_locally
+        - droplet_id.content|length > 0
+        - load_balancers is defined
+        - load_balancers|length > 0
+
+    - name: wait a moment for the load balancer to adapt
+      pause:
+        seconds: 10
+      when: 
+        - not running_locally
+        - droplet_id.content|length > 0 
+        - load_balancers is defined
+        - load_balancers|length > 0
+
+  ## There are three sets of changes we need to make for each server.
+  ## 
+  ## 1. (Maybe) update the DB server, but this is unlikely. If the config hasn't changed,
+  ## we shouldn't need to do much.
+  ##
+  ## 2. Update the application code and restart the worker process.
+  ##
+  ## 3. Update the intrusion detection and rebuild all the signatures, so that 
+  ## intrusion detection doesn't go insane with all the changed files. 
+
+  roles:
+    - role: logging
+      tags: ['application']
+    - role: networking
+      tags: ['application']
+    - role: fail2ban
+      tags: ['application']
+    - role: webserver
+      tags: ['application']
+      when: "'application' in group_names"
+    - role: intrusion
+      tags: ['application']
+    - role: application-health
+      tags: ['application']
+    - role: audit
+      tags: ['application']
+
+
+  ## After that, we expect the webserver role to wait until we have spun up the server
+  ## successfully. 
+
+  post_tasks:
+    - name: wait for webserver to come up
+      wait_for: 
+        host: "{{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}"
+        port: 443 
+        state: started 
+        timeout: 60
+
+    - debug:
+        msg: "Adding {{droplet_id.content}} to {{load_balancers[0].name}}"
+      when: 
+        - not running_locally
+        - droplet_id.content|length > 0
+        - load_balancers is defined
+        - load_balancers|length > 0
+
+    - name: add the droplet into the load balancer
+      uri: 
+        url: "https://api.digitalocean.com/v2/load_balancers/{{load_balancers[0].id}}/droplets"
+        method: POST
+        return_content: yes
+        status_code: 204
+        headers:
+            Authorization: "Bearer {{digital_ocean_api_key}}"
+        body_format: json
+        body: '{"droplet_ids": [ {{droplet_id.content}} ]}'
+      register: restore_status
+      until: restore_status.status == 204
+      retries: 12
+      delay: 10
+      when: 
+        - not running_locally
+        - droplet_id.content|length > 0 
+        - load_balancers is defined
+        - load_balancers|length > 0
+
+    - name: wait a moment for the load balancer to adapt
+      pause:
+        seconds: 10
+      when: 
+        - not running_locally
+        - droplet_id.content|length > 0 
+        - load_balancers is defined
+        - load_balancers|length > 0

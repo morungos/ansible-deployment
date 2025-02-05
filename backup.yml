@@ -1,0 +1,15 @@
+---
+- hosts: "application"
+  tasks:
+    - name: copy redis append only log
+      fetch:
+        dest: '/Users/stuart/backup/'
+        src: '/var/lib/redis/redis-staging-ao.aof'
+        flat: yes
+      become: no
+      run_once: true
+
+    - name: timestamp the redis append only log backup
+      delegate_to: localhost
+      shell: "mv /Users/stuart/backup/redis-staging-ao.aof /Users/stuart/backup/redis-staging-ao.`date '+%Y%m%d%H%M%S'`.aof"
+      run_once: true

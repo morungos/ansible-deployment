@@ -1,0 +1,35 @@
+---
+# Testing connection
+- hosts: all
+  tasks:
+    - name: Check if ansible_play_hosts == ansible_play_hosts_all (means UNREACHABLE hosts detected)
+      run_once: True
+      assert:
+        that:
+          - ansible_play_hosts == ansible_play_hosts_all
+      delegate_to: localhost
+
+# Security and notification
+- hosts: application
+  become: True
+  tags: ['security']
+  roles:
+    - role: clean
+    - role: networking
+    - role: mail
+    - role: logging
+
+# redis install
+- hosts: application
+  become: True
+  tags: ['redis']
+  roles:
+    - role: redis
+
+- hosts: application
+  become: True
+  tags: ['security']
+  roles:
+    - role: fail2ban
+    - role: intrusion
+      when: enable_intrusion
