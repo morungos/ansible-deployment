@@ -1,0 +1,72 @@
+---
+- name: flush all handlers before checking health
+  meta: flush_handlers
+
+- name: check nginx status
+  command: systemctl is-active nginx.service
+  register: nginx_status
+  ignore_errors: yes
+
+- name: check nginx is running
+  assert: 
+    that: nginx_status.rc == 0 and nginx_status.stdout == 'active'
+
+- name: check redis status
+  command: "redis-cli -a {{redis_master_password}} --raw role"
+  register: redis_status
+  ignore_errors: yes
+
+- name: show redis status
+  debug:
+    var: redis_status
+
+- name: check redis sentinel status
+  command: "redis-cli -p 26379 -a {{redis_master_password}} --raw sentinel master master1"
+  register: redis_sentinel_status
+  ignore_errors: yes
+  when: 
+    - redis_sentinel_enabled
+
+- name: show redis sentinel status
+  debug:
+    var: redis_sentinel_status
+  when: 
+    - redis_sentinel_enabled
+
+- name: check api application status
+  command: systemctl is-active {{api_service_name}}.service
+  register: api_application_status
+  ignore_errors: yes
+
+- name: check user application status
+  command: systemctl is-active {{user_service_name}}.service
+  register: user_application_status
+  ignore_errors: yes
+
+- name: check psychometric application status
+  command: systemctl is-active {{psychometric_service_name}}.service
+  register: psychometric_application_status
+  ignore_errors: yes
+
+- name: check application services are all running
+  assert: 
+    that: 
+      - api_application_status.rc == 0 
+      - api_application_status.stdout == 'active'
+      - user_application_status.rc == 0 
+      - user_application_status.stdout == 'active'
+      - psychometric_application_status.rc == 0 
+      - psychometric_application_status.stdout == 'active'
+
+## Give the services some time to get to the point they can listen
+- pause:
+    seconds: 15
+
+## This is pinging by raw IP address, so the response will not match
+## the certificate. And on Virtualbox, the certificate is bloody useless
+## anyway, so we skip this. 
+- name: check the health endpoint
+  uri:
+    url: "http://{{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}/health"
+    status_code: 200
+  when: not running_locally

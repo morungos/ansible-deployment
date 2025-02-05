@@ -1,0 +1,5 @@
+---
+- name: restart samhain
+  service:
+    name: samhain
+    state: restarted

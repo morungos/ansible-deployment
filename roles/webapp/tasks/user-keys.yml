@@ -1,0 +1,36 @@
+---
+- name: create .ssh
+  file:
+    path: "~/.ssh"
+    state: directory
+    mode: 0700
+
+## The key comes from a variable, which allows it to be handled by Ansible vault
+- name: copy deployment key file
+  copy:
+    src: "turalt_deployment.key"
+    dest: "~/.ssh/turalt_deployment"
+    mode: 0600
+
+- name: install deployment keys
+  ssh_config:
+    host: "github.com"
+    hostname: "github.com"
+    user: "{{service_user}}"
+    remote_user: "git"
+    identity_file: "~/.ssh/turalt_deployment"
+    state: "present"
+    strict_host_key_checking: "no"
+
+- name: get the server keys
+  shell: ssh-keyscan github.com
+  register: keyscan
+
+- name: add the server keys
+  lineinfile:
+    path: "~/.ssh/known_hosts"
+    create: yes
+    state: present
+    line: "{{ item }}"
+    mode: 0600
+  with_items: '{{ keyscan.stdout_lines }}'

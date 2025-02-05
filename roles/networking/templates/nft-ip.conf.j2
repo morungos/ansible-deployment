@@ -1,0 +1,23 @@
+flush table ip filter
+
+table ip filter {
+	chain input {
+		type filter hook input priority 0; policy accept;
+		iifname "lo" accept
+		ct state related,established accept
+		iifname "{{ public_network_interface }}" meta l4proto tcp tcp dport 22 accept
+		iifname "{{ public_network_interface }}" meta l4proto tcp tcp dport 80 accept
+		iifname "{{ public_network_interface }}" meta l4proto tcp tcp dport 443 accept
+		iifname "{{ public_network_interface }}" meta l4proto udp udp sport 123 accept
+		drop
+	}
+
+	chain forward {
+		type filter hook forward priority 0; policy accept;
+	}
+
+	chain output {
+		type filter hook output priority 0; policy accept;
+		meta l4proto udp udp dport 123 accept
+	}
+}

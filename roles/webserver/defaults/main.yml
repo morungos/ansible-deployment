@@ -1,0 +1,10 @@
+---
+password_protected_pages: false
+
+web_username: "turalt"
+web_password: "turalt"
+
+static_directory: "{{deployment_directory}}/static"
+web_directory: "{{deployment_directory}}/web"
+admin_directory: "{{deployment_directory}}/admin"
+psychometric_directory: "{{deployment_directory}}/psychometric"

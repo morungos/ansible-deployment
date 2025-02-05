@@ -1,0 +1,38 @@
+---
+- name: remove temporary directories if they exist
+  file:
+    path: "{{item}}"
+    state: 'absent'
+  with_items:
+    - "/tmp/node-latest.tar.gz"
+    - "/tmp/node-latest-install"
+
+- name: get node
+  get_url:
+    dest: '/tmp/node-latest.tar.gz'
+    url: '{{ node_base_url }}/v{{node_version}}/node-v{{node_version}}-{{node_architecture}}.tar.gz'
+
+- name: create directory
+  file:
+    path: "/tmp/node-latest-install"
+    state: directory
+
+- name: unpack node
+  command: tar -x -z --strip-components=1 -f /tmp/node-latest.tar.gz chdir=/tmp/node-latest-install creates=/tmp/node-latest-install/bin
+  args:
+    warn: false
+
+- name: remove readme, license, and change log files
+  file:
+    path: "/tmp/node-latest-install/{{item}}"
+    state: 'absent'
+  with_items:
+    - "README.md"
+    - "CHANGELOG.md"
+    - "LICENSE"
+
+- name: deploy local node
+  shell: cp -rf /tmp/node-latest-install/* /usr/local/ creates={{node_binary_directory}}/node
+
+- name: Install node-gyp
+  command: npm install node-gyp knex-migrate -g --porcelain --progress=false --loglevel=warn

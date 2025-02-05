@@ -1,0 +1,36 @@
+---
+- name: removing unused modules
+  apt:
+    name: 
+      - chef
+      - puppet
+      - jsonlint
+    state: absent
+    autoremove: yes
+
+- name: start time synchronization
+  command: timedatectl set-ntp on
+
+## Make sure systemd's persistence is on
+
+- name: create the directory for systemd logs
+  file:
+    state: directory
+    path: "/var/log/journal"
+    mode: "0755"
+
+## Early on, let's suspend intrusion detection, as we don't want to 
+## trigger a detection storm before we're done updating. We'll restart
+## it later, when we process that role.
+
+- name: test if intrusion detection is installed
+  shell: dpkg-query -W "samhain" 2>/dev/null
+  register: samhain_installed
+  failed_when: false
+  changed_when: false
+
+- name: stop the intrusion detection if installed
+  service:
+    name: samhain
+    state: stopped
+  when: samhain_installed.rc == 0

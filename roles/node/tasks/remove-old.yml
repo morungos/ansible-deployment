@@ -1,0 +1,13 @@
+- name: clean the npm cache
+  command: "npm cache clean -f"
+  
+- name: remove all the node files
+  file:
+    path: "{{item}}"
+    state: 'absent'
+  with_items:
+    - "{{ node_binary_directory }}/npm"
+    - "{{ node_binary_directory }}/node"
+    - "{{ node_package_directory }}/node_modules"
+    - "{{ node_prefix }}/include/node"
+    - "{{ node_prefix }}/share/man/man1/node.1"

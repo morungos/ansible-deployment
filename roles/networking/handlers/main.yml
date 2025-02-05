@@ -1,0 +1,4 @@
+---
+- name: reload nftables ip rules
+  command: nft -f /etc/nftables.d/ip.conf
+  when: nftables_ip_rules_written.changed

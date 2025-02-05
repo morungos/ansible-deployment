@@ -1,0 +1,27 @@
+---
+- name: remove unused modules
+  apt:
+    name: 
+      - jsonlint
+    state: absent
+    autoremove: yes
+
+- name: create user
+  user:
+    name: "{{service_user}}"
+    comment: "{{service_user}} webapp"
+    state: present
+
+- name: create user
+  user:
+    name: "{{service_user}}"
+    comment: "{{service_user}} webapp"
+    state: present
+    groups: www-data
+
+- name: create log directory
+  file:
+    dest: '{{service_log_directory}}'
+    state: directory
+    owner: '{{service_user}}'
+    group: adm

@@ -1,0 +1,39 @@
+---
+redis_config_file: '/etc/redis/redis.conf'
+sentinel_config_file: '/etc/redis/sentinel.conf'
+
+redis_settings:
+  - key: 'protected-mode'
+    value: 'no'
+  - key: 'port'
+    value: '{{redis_port}}'
+  - key: 'bind'
+    value: "127.0.0.1"
+  - key: 'tcp-keepalive'
+    value: '300'
+  - key: 'masterauth'
+    value: '{{redis_master_password}}'
+  - key: 'requirepass'
+    value: '{{redis_master_password}}'
+  - key: 'appendonly'
+    value: 'yes'
+  - key: 'appendfilename'
+    value: 'redis-staging-ao.aof'
+
+sentinel_settings:
+  - key: 'port'
+    value: '{{redis_sentinel_port}}'
+  - key: 'bind'
+    value: "127.0.0.1"
+  - key: 'sentinel leader-epoch'
+    value: "{{redis_master_name}} 0"
+  - key: 'sentinel config-epoch'
+    value: "{{redis_master_name}} 0"
+  - key: 'sentinel auth-pass'
+    value: "{{redis_master_name}} {{redis_master_password}}"
+  - key: 'sentinel down-after-milliseconds'
+    value: "{{redis_master_name}} 60000"
+  - key: 'sentinel failover-timeout'
+    value: "{{redis_master_name}} 60000"
+  - key: 'sentinel parallel-syncs'
+    value: "{{redis_master_name}} 60"

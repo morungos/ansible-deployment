@@ -1,0 +1,38 @@
+---
+- name: install python-apt
+  apt: 
+    update_cache: yes
+    pkg:
+    - 'python-apt'
+
+- name: run updates on the software packages (old system)
+  apt: 
+    upgrade: yes
+    force_apt_get: yes
+
+- name: replace references in sources.list
+  replace:
+    path: '/etc/apt/sources.list'
+    regexp: '(\b)stretch(\b)'
+    replace: 'buster'
+    backup: yes
+
+- name: run updates on the software packages (new system)
+  apt: 
+    update_cache: yes
+    upgrade: yes
+    force_apt_get: yes
+
+- name: run the distribution upgrade
+  apt: 
+    upgrade: 'dist'
+
+- name: reboot the system
+  reboot:
+    msg: "Reboot to complete system update"
+
+- name: purge remaining modules
+  apt: 
+    update_cache: yes
+    purge: yes
+    autoremove: yes

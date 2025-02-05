@@ -1,0 +1,19 @@
+[Unit]
+Description={{user_service_name}}
+Requires=redis.service
+After=redis.service
+
+[Service]
+ExecStart={{node_binary_directory}}/node {{deployment_directory}}/{{user_service_directory}}/main.js --config {{user_service_config}}
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{user_service_name}}
+WorkingDirectory={{deployment_directory}}/{{user_service_directory}}
+User={{service_user}}
+Environment="LOG4JS_CONFIG={{deployment_directory}}/{{user_service_directory}}/logging.local.json"
+Environment="NODE_ENV=production"
+
+[Install]
+WantedBy=multi-user.target

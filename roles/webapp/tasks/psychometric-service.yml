@@ -1,0 +1,26 @@
+---
+- name: write psychometric service configuration files
+  template: 
+    src: "psychometric-service.config.j2" 
+    dest: "{{psychometric_service_config}}" 
+    mode: "0644"
+    validate: 'jsonlint -q %s'
+  notify:
+    - restart psychometric service
+
+- name: write psychometric service files
+  template: src={{ item.src }} dest={{ item.dest }} mode={{ item.mode }}
+  notify:
+    - restart psychometric service
+  with_items:
+    - { src: "psychometric-service.service.j2", dest: "{{psychometric_service_file}}", mode: '0644' }
+    - { src: "failure.service.j2", dest: "{{service_file_directory}}/unit-status-mail@.service", mode: '0644' }
+
+- name: reload systemd daemons
+  command: systemctl daemon-reload
+
+- name: enable the daemon
+  command: systemctl enable {{psychometric_service_name}}.service
+
+- name: ensure the service is running
+  service: name={{psychometric_service_name}} state=restarted enabled=yes

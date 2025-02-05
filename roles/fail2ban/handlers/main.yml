@@ -1,0 +1,18 @@
+---
+- name: restart fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+
+- name: reload fail2ban
+  command: fail2ban-client reload --restart
+
+- name: reload nftables fail2ban rules
+  command: nft -f /etc/nftables.d/fail2ban.conf
+  when: nftables_fail2ban_rules_written.changed
+
+- name: reload fail2ban service
+  systemd:
+    name: "fail2ban.service"
+    daemon_reload: yes
+    enabled: yes

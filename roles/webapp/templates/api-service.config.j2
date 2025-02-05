@@ -1,0 +1,50 @@
+{
+  "server" : {
+    "port": "3001"
+  },
+  "service": {
+    "bufferSize": 1000,
+    "identity": {
+      "endpoint": "http://localhost:3002/api/tokens/status"
+    }
+  },
+  "session": {
+    "web": {
+      "name": "apiSid",
+      "expiration": {{ session_timeout }},
+      "cookie": {
+        "secure": true,
+        "httpOnly": true,
+        "maxAge": {{ session_timeout }}
+      },
+      "proxy": true
+    }
+  },
+  "redis": {
+    "expire": 7200,
+    "options": {
+      "name": {{redis_master_name | to_json}},
+{% if redis_sentinel_enabled %}
+      "sentinels": [
+        {% for host in groups['application'] %}{ "host": {{hostvars[inventory_hostname]['ansible_' + private_network_interface]['ipv4']['address'] | to_json}}, "port": {{redis_sentinel_port}} }{% if not loop.last %},{% endif %}{% endfor %}
+      ],
+{% endif %}
+      "password": {{redis_master_password | to_json}}
+    }
+  },
+  "responses": {
+    "file": "{{deployment_directory}}/data/api-responses.dat"
+  },
+  "security": {
+    "token": {
+      "secret": {{security_token_secret | to_json}},
+      "expiry": {
+        "reset": 7200000,
+        "verify": 7200000
+      }
+    }
+  },
+  "http": {
+    "format": ":method :url HTTP/:http-version :status :content-length \":referrer\" \":user-agent\" :response-time"
+  }
+}

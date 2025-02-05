@@ -1,0 +1,104 @@
+{
+  "server" : {
+    "port": "3002"
+  },
+  "flush": {
+    "bufferSize": 1000
+  },
+  "session": {
+    "web": {
+      "name": "webSid",
+      "expiration": {{ session_timeout }},
+      "cookie": {
+        "secure": true,
+        "httpOnly": true,
+        "maxAge": {{ session_timeout }}
+      },
+      "rolling": true,
+      "proxy": true
+    }
+  },
+  "oidc": {
+    "clientKey": {{oauth_client_id | to_json}},
+    "clientSecret": {{oauth_client_secret | to_json}},
+    "redirectUris": [
+      {% for u in oauth_redirect_uris %}"{{u}}"{% if not loop.last %}, {% endif %}{% endfor %}
+    ]
+  },
+  "braintree": {
+    "environment": {{braintree_environment | to_json}},
+    "merchant_id": {{braintree_merchant_id | to_json}},
+    "private_key": {{braintree_private_key | to_json}},
+    "public_key": {{braintree_public_key | to_json}},
+    "merchant_account_id": {{braintree_merchant_account_id | to_json}}
+  },
+  "captcha": {
+    "key": "{{captcha_key}}",
+    "secret": "{{captcha_secret}}"
+  },
+  "database": {
+    "client": {{database_client | to_json}},
+    "connection": {{database_connection | to_json}},
+    "pool": {{database_pool | to_json}}
+  },
+  "background": {
+    "queue": {
+      "cycle_time": 30000
+    }
+  },
+  "redis": {
+    "expire": 7200,
+    "options": {
+      "name": {{redis_master_name | to_json}},
+{% if redis_sentinel_enabled %}
+      "sentinels": [
+        {% for host in groups['application'] %}{ "host": {{hostvars[inventory_hostname]['ansible_' + private_network_interface]['ipv4']['address'] | to_json}}, "port": {{redis_sentinel_port}} }{% if not loop.last %},{% endif %}{% endfor %}
+      ],
+{% endif %}
+      "password": {{redis_master_password | to_json}}
+    }
+  },
+  "security": {
+    "token": {
+      "secret": {{security_token_secret | to_json}},
+      "expiry": {
+        "reset": 7200000,
+        "verify": 7200000
+      }
+    }
+  },
+  "mail": {
+    "link_base": {{mail_link_base | to_json}},
+    "primary_base": {{mail_primary_base | to_json}},
+    "settings" : {
+      "views" : {
+        "root" : "{{deployment_directory}}/templates"
+      }
+    },
+    "transport" : {
+      "mailgun" : {
+{% if mailgun_private_key is defined and mailgun_domain is defined %}
+        "auth" : {
+          "api_key" : {{mailgun_private_key | to_json}},
+          "domain" : {{mailgun_domain | to_json}}
+        }
+{% endif %}
+      }
+    },
+    "keys" : {
+{% if mailgun_validation_key is defined %}
+      "mailgun" : {{mailgun_validation_key | to_json}}
+{% endif %}
+    },
+    "sender" : {{mail_sender_email | to_json}},
+    "replyTo" : {{mail_reply_to_email | to_json}},
+    "copy": {{mail_copy_email | to_json}},
+    "contact": {{mail_contact_email | to_json}}
+  },
+  "http": {
+    "format": ":method :url HTTP/:http-version :status :content-length \":referrer\" \":user-agent\" :response-time"
+  },
+  "plans": {
+    "inviteSignature": {{invite_signature | to_json}}
+  }
+}

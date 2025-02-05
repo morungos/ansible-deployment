@@ -1,0 +1,2 @@
+---
+public_interface: "{{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}"

@@ -1,0 +1,81 @@
+---
+- name: install required components
+  apt: 
+    name:
+      - git
+      - rsync
+    update_cache: yes 
+    cache_valid_time: 3600 
+    state: present
+
+- name: create deployment directory
+  file:
+    path: "{{deployment_directory}}"
+    state: directory
+    mode: 0750
+    owner: "{{service_user}}"
+    group: "www-data"
+
+- name: copy files
+  synchronize:
+    src: "./build/production/"
+    dest: "{{deployment_directory}}"
+    archive: "no"
+    times: "yes"
+    recursive: "yes"
+    delete: "yes"
+    rsync_opts: 
+      - "--exclude=/node_modules/**"
+      - "--exclude=/static/**"
+
+- name: ensure file ownership
+  file:
+    path: "{{deployment_directory}}"
+    owner: "{{service_user}}"
+    group: "www-data"
+    recurse: "yes"
+
+
+- name: copy remaining deployment files
+  synchronize:
+    src: "./build/production/"
+    dest: "{{deployment_directory}}"
+    archive: false
+    recursive: true
+    delete: true
+    checksum: true
+    rsync_opts: 
+      - "--no-owner"
+      - "--no-group"
+      - "--omit-dir-times"
+      - "--chown={{ service_user }}:www-data"
+      - "--filter='protect /static'"
+      - "--filter='protect /node_modules'"
+  become: true
+  become_user: '{{ service_user }}'
+
+- name: install user keys
+  import_tasks: 'user-keys.yml'
+  become: yes
+  become_user: '{{ service_user }}'
+
+- name: install packages
+  import_tasks: 'packages.yml'
+  become: yes
+  become_user: '{{ service_user }}'
+
+- name: update the database
+  run_once: true
+  command: >
+    npx knex-migrate --knexfile knexfile.local.js --env production up
+  args:
+    chdir: "{{deployment_directory}}/{{user_service_directory}}"
+
+- name: install user service
+  import_tasks: 'user-service.yml'
+
+- name: install api service
+  import_tasks: 'api-service.yml'
+
+- name: install psychometric service
+  import_tasks: 'psychometric-service.yml'

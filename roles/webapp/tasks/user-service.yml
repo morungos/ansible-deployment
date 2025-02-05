@@ -1,0 +1,26 @@
+---
+- name: write user service configuration files
+  template: 
+    src: "user-service.config.j2" 
+    dest: "{{user_service_config}}" 
+    mode: "0644"
+    validate: 'jsonlint -q %s'
+  notify:
+    - restart user service
+
+- name: write user service files
+  template: src={{ item.src }} dest={{ item.dest }} mode={{ item.mode }}
+  notify:
+    - restart user service
+  with_items:
+    - { src: "user-service.service.j2", dest: "{{user_service_file}}", mode: '0644' }
+    - { src: "failure.service.j2", dest: "{{service_file_directory}}/unit-status-mail@.service", mode: '0644' }
+
+- name: reload systemd daemons
+  command: systemctl daemon-reload
+
+- name: enable the daemon
+  command: systemctl enable {{user_service_name}}.service
+
+- name: ensure the service is running
+  service: name={{user_service_name}} state=restarted enabled=yes

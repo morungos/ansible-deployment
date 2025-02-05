@@ -1,0 +1,31 @@
+## rsyslog setup to grab the centralized logging data and 
+## stuff it into log files, where it can be periodically 
+## compressed and rotated as needed. This is very much more
+## what we need than a huge ELK stack.
+
+template(name="detailedAggregateLogEntry" type="list") {
+    property(name="timestamp" dateFormat="rfc3339")
+    constant(value=" ")
+    property(name="hostname")
+    constant(value=" ")
+    property(name="syslogseverity-text")
+    constant(value=" ")
+    property(name="syslogfacility-text")
+    constant(value=" ")
+    property(name="syslogtag")
+    property(name="msg" spifno1stsp="on" )
+    property(name="msg" droplastlf="on")
+    constant(value="\n")
+}
+
+*.* action(
+    type="omfile"
+    file="{{ service_log_directory }}/{{ aggregate_log_name }}"
+    template="detailedAggregateLogEntry"
+)
+
+local7.* action(
+    type="omfile"
+    file="{{ service_log_directory }}/{{ http_log_name }}"
+    template="detailedAggregateLogEntry"
+)

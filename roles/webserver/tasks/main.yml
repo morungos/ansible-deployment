@@ -1,0 +1,55 @@
+---
+- name: Installing packages
+  apt: 
+    name:
+      - daemon
+      - nginx
+    state: present 
+    update_cache: yes 
+    cache_valid_time: 3600
+
+- name: Install default certificates
+  import_tasks: 'defaults.yml'
+  become: yes
+
+## Ansible resolves the path relative to the roles/<rolename>/files directory
+- name: Remove old configuration
+  file:
+    state: absent
+    dest: "/etc/nginx/sites-available/turalt-api"
+  notify:
+    - restart nginx
+
+- name: Copy configuration
+  template:
+    src: "nginx-config.j2"
+    dest: "/etc/nginx/sites-available/{{target_name}}"
+  notify:
+    - restart nginx
+
+- name: Remove default nginx site
+  file: 
+    state: absent 
+    path: /etc/nginx/sites-enabled/default
+  notify:
+    - restart nginx
+
+- name: Remove any old nginx site link
+  file: 
+    state: absent 
+    path: /etc/nginx/sites-available/turalt-api
+  notify:
+    - restart nginx
+
+- name: Make nginx site link
+  file: 
+    state: link 
+    src: /etc/nginx/sites-available/{{target_name}}
+    dest: /etc/nginx/sites-enabled/{{target_name}}
+  notify:
+    - restart nginx
+
+- name: ensure nginx is running
+  service: 
+    name: nginx 
+    state: started

@@ -1,0 +1,6 @@
+---
+- name: "Local action: Mark the deployment"
+  local_action: shell echo '|' `git log -n1 | grep -E "^commit"` '|' {{inventory_hostname}} '|' `date` '|'  `whoami` '|' >> deploy.md
+  run_once: yes
+  become: false
+  when: deploy_audit_enabled|default(false)

@@ -1,0 +1,116 @@
+---
+- name: install redis-server, python-redis
+  apt:
+    name: 
+      - redis-server
+      - python3-redis
+    update_cache: yes
+    state: present
+
+- name: install redis-sentinel
+  apt:
+    name: 
+      - redis-sentinel
+    update_cache: no
+    state: present
+  when: 
+    - redis_sentinel_enabled
+
+- name: update /etc/sysctl.conf
+  lineinfile:
+    path: "/etc/sysctl.conf"
+    regexp: "^vm.overcommit_memory"
+    line: "vm.overcommit_memory = 1"
+  notify:
+    - restart redis
+
+- name: install on-boot service for disable-transparent-huge-pages
+  copy:
+    src: "disable-transparent-huge-pages.service"
+    dest: "{{service_file_directory}}/"
+    mode: '0644'
+  register: disable_transparent_huge_pages_installed
+
+- name: enable and start service for disable-transparent-huge-pages
+  systemd:
+    daemon-reload: yes
+    name: disable-transparent-huge-pages.service
+    enabled: yes
+    state: started
+  when: disable_transparent_huge_pages_installed.changed
+
+- name: update the redis config file
+  lineinfile:
+    path: "{{redis_config_file}}"
+    regexp: "^{{item.key}}\\b(.*)"
+    line: "{{item.key}} {{item.value}}"
+  with_items: "{{redis_settings}}"
+  notify:
+    - restart redis
+
+## And apply the changes if we need to. We may well not need to.
+- meta: flush_handlers
+
+## Choose a master. This will be the first master that we can
+## find. It doesn't matter if there's more than one nominated. 
+
+- name: retrieve redis status
+  command: >
+    redis-cli -a {{redis_master_password}} --raw role
+  register: redis_status
+  ignore_errors: true
+
+- name: set redis status fact
+  set_fact: 
+    redis_replication_status: "{{redis_status.stdout_lines}}"
+  when: 
+    - redis_sentinel_enabled
+
+- name: identify the first master
+  set_fact:
+    redis_first_master: "{% for host in groups['application'] if hostvars[host]['redis_replication_status'][0]|default('none') == 'master' %}{% if loop.first %}{{host}}{% endif %}{% endfor %}"
+  when: 
+    - redis_sentinel_enabled
+
+## Now we know what the master is, we can update the redis configs
+## to point everyone to the IP address for the initial master server.
+
+- name: update the redis config file with the replica
+  lineinfile:
+    path: "{{redis_config_file}}"
+    regexp: "^replicaof\\b(.*)"
+    line: "replicaof {{hostvars[redis_first_master]['ansible_' + private_network_interface]['ipv4']['address']}} 6379"
+  notify:
+    - restart redis
+  when: 
+    - redis_sentinel_enabled
+    - inventory_hostname != redis_first_master
+
+## And again apply the changes if we need to. We may well not need to.
+- meta: flush_handlers
+
+## Now we can continue to configure sentinel.
+
+- name: update the sentinel config file
+  lineinfile:
+    path: "{{sentinel_config_file}}"
+    regexp: "^sentinel monitor\\b(.*)"
+    line: "sentinel monitor {{redis_master_name}} {{hostvars[redis_first_master]['ansible_' + private_network_interface]['ipv4']['address']}} 6379 2"
+  notify:
+    - restart sentinel
+  when: 
+    - redis_sentinel_enabled
+
+- name: update the sentinel config file
+  lineinfile:
+    path: "{{sentinel_config_file}}"
+    regexp: "^{{item.key}}\\b(.*)"
+    line: "{{item.key}} {{item.value}}"
+  with_items: "{{sentinel_settings}}"
+  notify:
+    - restart sentinel
+  when: 
+    - redis_sentinel_enabled
+
+## At this point, every server is a master on its own. Next step is
+## to work out if one of the servers is currently a master. 

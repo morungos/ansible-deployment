@@ -1,0 +1,70 @@
+---
+- name: install acme.sh
+  shell: wget -O - https://get.acme.sh | sh
+  args:
+    creates: /root/.acme.sh
+
+## There's a need here for us to try to re-issue, unless all the exact 
+## requirements are met. That means, we need to have all the domains we 
+## want added. If not, re-issue. 
+##
+## The order for fields is: 
+## Main_Domain|KeyLength|SAN_Domains|Created|Renew
+
+## This somewhat cunning use of PCRE turns off the metacharacters, and 
+## makes for an exact match on the first, raw, field, for any domain. 
+## The result can then be pulled out as later fields to test to see 
+## if there's an exact match on secondary fields. 
+
+- name: get current certificates
+  shell: "/root/.acme.sh/acme.sh --list --listraw | tail -n +2 | grep -P '^\\Q{{ssl_domains|first}}\\E\\|'"
+  register: current_certificates
+  failed_when: current_certificates.rc >= 2
+
+- name: verify the current certificates
+  command: "openssl x509 -in /etc/ssl/certs/{{target_name}}.crt -text -noout"
+  ignore_errors: true
+  register: valid_certificates
+
+## Checked to see the format for >1 additional domain -- turns out it's comma separated
+## We don't need to check for the primary domain, as we won't have current_certificates
+## unless we find it above.
+
+- name: decide what we need to issue
+  set_fact:
+    issue_required: "{{current_certificates.stdout|default() == '' or current_certificates.stdout.split('|')[2] != ssl_domains[1:]|join(',')}}"
+    install_required: "{{valid_certificates.rc != 0}}"
+
+## It would be nice if, here, we checked all the results from all the different
+## servers, and if necessary, synchronized across data from a known good one.
+
+- name: verify and issue the certificate
+  command: | 
+    env DO_API_KEY='{{digital_ocean_api_key}}' 
+    /root/.acme.sh/acme.sh --issue 
+    -d {{ssl_domains|first}}
+    --dns dns_dgon
+    {% for d in ssl_domains[1:] %} -d '{{d}}' {% endfor %}
+  when: issue_required
+  register: acme_result
+
+- name: copy the reload script
+  copy:
+    src: restart-nginx.sh
+    dest: /root/restart-nginx.sh
+    mode: "0755"
+
+## There's a timing issue here. We want to do this, but nginx might not yet be installed
+## and the missing service is an issue. The given --reloadcmd might fail. 
+
+- name: install the certificate
+  command: | 
+    env DO_API_KEY='{{digital_ocean_api_key}}' 
+    /root/.acme.sh/acme.sh --install-cert
+    -d {{ssl_domains|first}}
+    {% for d in ssl_domains[1:] %} -d '{{d}}' {% endfor %}
+    --keypath /etc/ssl/private/{{target_name}}.key
+    --fullchainpath /etc/ssl/certs/{{target_name}}.crt
+    --reloadcmd  /root/restart-nginx.sh
+  when: install_required or issue_required
+  register: acme_install_result

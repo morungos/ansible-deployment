@@ -1,0 +1,19 @@
+{
+  "appenders": {
+    "files" : {
+      "type": "dateFile",
+      "filename": "{{service_log_directory}}/turalt-psychometric.log",
+      "pattern": "-yyyy-MM-dd",
+      "alwaysIncludePattern": true,
+      "compress": true
+    }
+  },
+  "categories": {
+    "default": {
+      "appenders": [
+        "files"
+      ], 
+      "level": "debug"
+    }
+  }
+}

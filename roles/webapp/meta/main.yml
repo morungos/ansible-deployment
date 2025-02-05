@@ -1,0 +1,6 @@
+---
+dependencies:
+  - {role: 'node'}
+  - {role: 'layout'}
+  - {role: 'database'}
+  - {role: 'redis'}

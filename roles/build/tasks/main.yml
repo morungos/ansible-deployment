@@ -1,0 +1,10 @@
+---
+- name: "Local action: Make sure we're up to date"
+  local_action: command yarn install --no-progress --non-interactive --silent
+  run_once: true
+  changed_when: false
+
+- name: "Local action: Package all client and service code for production"
+  local_action: command yarn build --no-progress --non-interactive --silent
+  run_once: true
+  changed_when: false

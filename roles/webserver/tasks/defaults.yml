@@ -1,0 +1,31 @@
+---
+## We start with an initial certificate and private key, as much so we can spin
+## up nginx as anything. This will be overwritten when we get a real key from
+## somewhere. These are essentially crap and unsigned, taken from default
+## distributions, so we don't care about their security.
+
+- name: Copy the initial default certificate
+  copy:
+    src: 'certificate.crt'
+    dest: "/etc/ssl/certs/{{target_name}}.crt"
+    owner: root
+    group: root
+    force: no
+
+- name: Copy the initial default private key
+  copy:
+    src: 'private-key.key'
+    dest: "/etc/ssl/private/{{target_name}}.key"
+    owner: root
+    group: root
+    mode: 0600
+    force: no
+
+## Add some Diffie Hellman parameters, not that we need them
+- name: Copy the dhparams
+  copy:
+    src: "dhparams.pem"
+    dest: "/etc/ssl/private/dhparams.pem"
+    owner: root
+    group: root
+    mode: 0600

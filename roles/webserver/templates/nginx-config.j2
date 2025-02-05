@@ -1,0 +1,183 @@
+## Handle the main server -- this only listens on the private network. Nothing
+## on the public network should break in here, as that's firewalled off. 
+
+log_format upstream_access   '$proxy_add_x_forwarded_for - $remote_user '
+                             '"$request" $status $body_bytes_sent $request_time '
+                             '"$http_referer" "$http_user_agent"';
+
+## First, the server for the health checks. This is on HTTP, and will match a default name,
+## but is very specific about the URL. Anything else is not found.
+server {
+  listen         {{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}:80 default_server;
+  server_name    _;
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_health,nohostname,severity=info upstream_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_health,nohostname;
+
+  location = /health {
+
+    # health logging will be very verbose. turn off when in production
+    # access_log off;
+    
+    proxy_pass              http://127.0.0.1:3002/api/health;
+    proxy_http_version      1.1;
+    proxy_set_header        X-Real-IP $remote_addr;
+    proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header        X-Forwarded-Proto http;
+    proxy_set_header        Host $http_host;
+    proxy_connect_timeout   10s;
+  }
+
+  location / {
+    return 444;
+  }
+}
+
+## Next up is the static server.
+server {
+  listen               {{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}:443 ssl http2;
+  server_name          {{static_domain}} {% for d in static_additional_domains %} {{d}} {% endfor %};
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_static,nohostname,severity=info upstream_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_static,nohostname;
+
+{% include "./templates/nginx-ssl-config.j2" %}
+{% include "./templates/nginx-common-config.j2" %}
+
+  root {{static_directory}};
+
+  ## Added core redirects to the primary psychometric server URLs. We're SSL here, so all of
+  ## these should be secure. We also want to make sure these are specific enough not to catch
+  ## values used elsewhere.
+
+  set $CSP "";
+  set $CSP "${CSP}default-src 'self'; ";
+  set $CSP "${CSP}frame-src 'self' forms.hubspot.com app.hubspot.com www.google.com; ";
+  set $CSP "${CSP}style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; ";
+  set $CSP "${CSP}img-src 'self' forms.hubspot.com www.google-analytics.com track.hubspot.com data:; ";
+  set $CSP "${CSP}font-src 'self' fonts.googleapis.com fonts.gstatic.com; ";
+  set $CSP "${CSP}script-src 'self' 'unsafe-inline' forms.hubspot.com www.google-analytics.com www.google.com www.gstatic.com maxcdn.bootstrapcdn.com cdnjs.cloudflare.com js.hs-scripts.com js.usemessages.com js.hs-analytics.net js.hsleadflows.net; ";
+  set $CSP "${CSP}connect-src 'self' localhost:8080 api.turalt.com www.google-analytics.com forms.hubspot.com api.hubspot.com; ";
+  set $CSP "${CSP}report-uri https://api.turalt.com/api/events/errors ";
+
+  add_header Content-Security-Policy-Report-Only $CSP;
+
+  rewrite ^/do$ https://{{psychometric_domain}}/do redirect;
+  rewrite ^/report/(.*)$ https://{{psychometric_domain}}/do?code=$1 redirect;
+  rewrite ^/reports/(.*)$ https://{{psychometric_domain}}/api/psychometric/instruments/reports/$1 redirect;
+  rewrite ^/download/(.*)$ https://{{psychometric_domain}}/download/$1 redirect;
+
+  ## Add caching for most of our static resources
+  
+  location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|ttf|woff|eot|mp4)$ {
+    expires 365d;
+    add_header Pragma public;
+    add_header Cache-Control "public";
+  }
+
+  error_page 404 /404.html;
+  error_page 500 502 503 504 /50x.html;
+
+  try_files $uri $uri.html $uri/index.html =404;
+}
+
+## And then the web server.
+server {
+  listen               {{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}:443 ssl http2;
+  server_name          {{webapp_domain}} {% for d in webapp_additional_domains %} {{d}} {% endfor %};
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_app,nohostname,severity=info upstream_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_app,nohostname;
+
+{% include "./templates/nginx-ssl-config.j2" %}
+{% include "./templates/nginx-common-config.j2" %}
+
+  root {{web_directory}};
+
+{% include "./templates/nginx-proxy-config.j2" %}
+
+  location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|ttf|woff|eot|mp4)$ {
+    expires 365d;
+    add_header Pragma public;
+    add_header Cache-Control "public";
+  }
+
+  location / {
+    root {{web_directory}};
+    try_files $uri/index.html $uri /index.html =404;
+  }
+}
+
+## And then the psychometric server.
+server {
+  listen               {{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}:443 ssl http2;
+  server_name          {{psychometric_domain}} {% for d in psychometric_additional_domains %} {{d}} {% endfor %};
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_psychometric,nohostname,severity=info upstream_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_psychometric,nohostname;
+
+{% include "./templates/nginx-ssl-config.j2" %}
+{% include "./templates/nginx-common-config.j2" %}
+
+  root {{psychometric_directory}};
+
+{% include "./templates/nginx-proxy-config.j2" %}
+
+  rewrite ^/report/(\w*) /do?code=$1 redirect;
+
+  location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|ttf|woff|eot|mp4)$ {
+    expires 365d;
+    add_header Pragma public;
+    add_header Cache-Control "public";
+  }
+
+  location / {
+    root {{psychometric_directory}};
+    try_files $uri/index.html $uri /index.html =404;
+  }
+}
+
+## And then the web admin server.
+server {
+  listen               {{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}:443 ssl http2;
+  server_name          {{admin_domain}} {% for d in admin_additional_domains %} {{d}} {% endfor %};
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_admin,nohostname,severity=info upstream_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_admin,nohostname;
+
+{% include "./templates/nginx-ssl-config.j2" %}
+{% include "./templates/nginx-common-config.j2" %}
+
+  root {{admin_directory}};
+
+{% include "./templates/nginx-proxy-config.j2" %}
+
+  location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|ttf|woff|eot|mp4)$ {
+    expires 365d;
+    add_header Pragma public;
+    add_header Cache-Control "public";
+  }
+
+  location / {
+    root {{deployment_directory}}/admin;
+    try_files $uri/index.html $uri /index.html =404;
+  }
+}
+
+
+# Add in a redirection, for more or less all the standard (not admin servers), though to the
+# standard system. We don't need anything similar for admin, because we're not wanting that to
+# to be as open. 
+server {
+  listen               {{hostvars[inventory_hostname]['ansible_' + public_network_interface]['ipv4']['address']}}:80;
+  server_name          {{static_domain}} {% for d in static_additional_domains %} {{d}} {% endfor %}
+                       {{webapp_domain}} {% for d in webapp_additional_domains %} {{d}} {% endfor %}
+                       {{psychometric_domain}} {% for d in psychometric_additional_domains %} {{d}} {% endfor %};
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_http,nohostname,severity=info upstream_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_http,nohostname;
+
+  location / {
+    return 301 https://$host$request_uri;
+  }
+}

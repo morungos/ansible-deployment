@@ -1,0 +1,13 @@
+{{ service_log_directory }}/*.log {
+  rotate 365
+  daily
+  compress
+  missingok
+  notifempty
+  dateext
+  dateformat .%Y-%m-%d
+  dateyesterday
+  postrotate
+    /usr/lib/rsyslog/rsyslog-rotate
+  endscript
+}

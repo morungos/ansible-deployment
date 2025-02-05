@@ -1,0 +1,19 @@
+---
+- name: install
+  apt:
+    name: samhain
+    update_cache: yes
+    cache_valid_time: 3600
+    state: present
+
+- name: update local configuration text file
+  template:
+    src: policy.txt.j2
+    dest: /etc/samhain/samhainrc
+
+## Update the database
+- name: update the signatures
+  command: >
+    samhain -t update -l none -m none -p none --foreground
+  notify:
+    - restart samhain

@@ -1,0 +1,10 @@
+module.exports = {
+  production: {
+    client: {{database_client | to_json}},
+    connection: {{database_connection | to_json}},
+    migrations: {
+      tableName: 'knex_migrations'
+    },
+    pool: {{database_pool | to_json}}
+  }
+}

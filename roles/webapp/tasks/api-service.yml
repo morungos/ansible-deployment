@@ -1,0 +1,25 @@
+---
+- name: write api service configuration files
+  template: 
+    src: "api-service.config.j2" 
+    dest: "{{api_service_config}}" 
+    mode: "0644"
+    validate: 'jsonlint -q %s'
+  notify:
+    - restart api service
+
+- name: write api service files
+  template: src={{ item.src }} dest={{ item.dest }} mode={{ item.mode }}
+  notify:
+    - restart api service
+  with_items:
+    - { src: "api-service.service.j2", dest: "{{api_service_file}}", mode: '0644' }
+
+- name: reload systemd daemons
+  command: systemctl daemon-reload
+
+- name: enable the daemon
+  command: systemctl enable {{api_service_name}}.service
+
+- name: ensure the service is running
+  service: name={{api_service_name}} state=restarted enabled=yes

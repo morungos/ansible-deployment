@@ -1,0 +1,245 @@
+---
+- name: install
+  apt:
+    name:
+      - fail2ban
+    update_cache: yes
+    cache_valid_time: 3600
+    state: present
+
+## If this changes, we need to restart the whole of fail2ban but this is strange, 
+## it seems that we are simply copying jail.conf to jail.local, unless it exists. 
+## We should probably check to see if it happens and trigger the handler only if needed.
+##
+## Jails are separate. We don't need to restart the whole of fail2ban for them.
+
+- name: make a local configuration
+  shell: awk '{ print; }' /etc/fail2ban/jail.conf | tee /etc/fail2ban/jail.local creates=/etc/fail2ban/jail.local
+  notify:
+    - restart fail2ban
+
+- name: change to nftables
+  community.general.ini_file:
+    dest: '/etc/fail2ban/jail.local'
+    section: 'DEFAULT'
+    option: '{{ item.option }}'
+    value: '{{ item.value }}'
+  with_items:
+    - { option: 'banaction', value: 'nftables-multiport' }
+    - { option: 'banaction_allports', value: 'nftables-allports' }
+    - { option: 'chain', value: 'input' }
+    - { option: 'bantime', value: '{{fail2ban_ban_time}}' }
+    - { option: 'findtime', value: '{{fail2ban_find_time}}' }
+    - { option: 'action', value: '%(action_mwl)s' }
+    - { option: 'mta', value: 'sendmail' }
+    - { option: 'destemail', value: '{{postfix_delegate}}' }
+    - { option: 'sender', value: 'fail2ban@{{ansible_hostname}}' }
+    - { option: 'sendername', value: 'fail2ban' }
+    - { option: 'ignoreip', value: '{{fail2ban_ignoreip}}' }
+    - { option: 'nginx_access_log', value: '{{ service_log_directory }}/{{ http_log_name }}' }
+    - { option: 'aggregate_log', value: '{{ service_log_directory }}/{{ aggregate_log_name }}'}
+    - { option: 'bantime.increment', value: 'true' }
+  notify:
+    - reload fail2ban
+
+- name: deploy the nftables fail2ban file
+  copy:
+    src: 'fail2ban-nftables.conf'
+    dest: '/etc/nftables.d/fail2ban.conf'
+  register: nftables_fail2ban_rules_written
+
+- name: add nftables include if required
+  lineinfile:
+    dest: /etc/nftables.conf
+    regexp: '^include "/etc/nftables\.d/fail2ban\.conf"'
+    line: 'include "/etc/nftables.d/fail2ban.conf"'
+    insertafter: EOF
+  notify:
+    - reload nftables fail2ban rules
+
+- name: deploy the fail2ban nftables config
+  copy:
+    src: 'fail2ban-nftables-common.local'
+    dest: '/etc/fail2ban/action.d/nftables-common.local'
+  notify:
+    - reload fail2ban
+
+- name: update the service config
+  community.general.ini_file:
+    dest: '{{ service_file_directory }}/fail2ban.service'
+    section: "{{item.section}}"
+    option: "{{item.option}}"
+    value: "{{item.value}}"
+    state: "{{item.state}}"
+    create: yes
+  with_items:
+    - {section: 'Unit',     state: 'present', option: 'Requires',   value: 'nftables.service'}
+    - {section: 'Unit',     state: 'present', option: 'PartOf',     value: 'nftables.service'}
+    - {section: 'Install',  state: 'present', option: 'WantedBy',   value: 'multi-user.target nftables.service'}
+  notify:
+    - reload fail2ban service
+
+
+- name: initialize the nginx-nohome filter
+  community.general.ini_file:
+    dest: "/etc/fail2ban/filter.d/nginx-nohome.conf"
+    section: "{{item.section}}"
+    option: "{{item.option}}"
+    value: "{{item.value}}"
+  with_items:
+    - {section: 'Definition',        option: 'failregex', value: 'nginx_\w+: <HOST> - - \"(GET|PUT|HEAD|POST)\s+\S*/~.*'}
+    - {section: 'Definition',        option: 'ignoreregex', value: ''}
+  notify:
+    - reload fail2ban
+
+
+- name: initialize the nginx-noproxy filter
+  community.general.ini_file:
+    dest: "/etc/fail2ban/filter.d/nginx-noproxy.conf"
+    section: "{{item.section}}"
+    option: "{{item.option}}"
+    value: "{{item.value}}"
+  with_items:
+    - {section: 'Definition',        option: 'failregex', value: 'nginx_\w+: <HOST> - - \"(GET|PUT|HEAD|POST)\s+http'}
+    - {section: 'Definition',        option: 'ignoreregex', value: ''}
+  notify:
+    - reload fail2ban
+
+
+- name: initialize the nginx-noscript filter
+  community.general.ini_file:
+    dest: "/etc/fail2ban/filter.d/nginx-noscript.conf"
+    section: "{{item.section}}"
+    option: "{{item.option}}"
+    value: "{{item.value}}"
+  with_items:
+    - {section: 'Definition',        option: 'failregex', value: 'nginx_\w+: <HOST> - - \"(GET|PUT|HEAD|POST)\s+\S*(\.jsp[afx]?|\.exe|\.dll|\.pl[x]?|\.cgi|\.scgi)\b'}
+    - {section: 'Definition',        option: 'ignoreregex', value: ''}
+  notify:
+    - reload fail2ban
+
+
+- name: update the nginx-botsearch filter to handle 444
+  community.general.ini_file:
+    dest: "/etc/fail2ban/filter.d/nginx-botsearch.conf"
+    section: "{{item.section}}"
+    option: "{{item.option}}"
+    value: "{{item.value}}"
+  with_items:
+    - {section: 'Definition',        option: 'failregex', value: 'nginx_\w+: <HOST> \- \S+ \"(GET|POST|HEAD) \/<block> \S+\" (404|444) .+$'}
+  notify:
+    - reload fail2ban
+
+
+- name: update the nginx-limit-req filter to handle syslog
+  community.general.ini_file:
+    dest: "/etc/fail2ban/filter.d/nginx-limit-req.conf"
+    section: "{{item.section}}"
+    option: "{{item.option}}"
+    value: "{{item.value}}"
+  with_items:
+    - {section: 'Definition',        option: 'failregex', value: '\[[a-z]+\] \d+#\d+: \*\d+ limiting requests, excess: [\d\.]+ by zone "(?:%(ngx_limit_req_zones)s)", client: <HOST>'}
+  notify:
+    - reload fail2ban
+
+
+- name: initialize the nginx-card-verification filter
+  community.general.ini_file:
+    dest: "/etc/fail2ban/filter.d/nginx-card-verification.conf"
+    section: "{{item.section}}"
+    option: "{{item.option}}"
+    value: "{{item.value}}"
+  with_items:
+    - {section: 'Definition',        option: 'failregex', value: 'nginx_\w+: <HOST> - - "(POST|PUT|GET) /(api/index.php/api/payments/subscription(/complete)?).php HTTP/(\d+|\.)*" 400'}
+    - {section: 'Definition',        option: 'ignoreregex', value: ''}
+  notify:
+    - reload fail2ban
+
+- name: create a modified custom sshd filter
+  template:
+    dest: "/etc/fail2ban/filter.d/application-sshd.conf"
+    src: "filter-application-sshd.conf.j2"
+  notify:
+    - reload fail2ban
+
+- name: create a modified custom botsearch filter
+  template:
+    dest: "/etc/fail2ban/filter.d/application-botsearch.conf"
+    src: "filter-application-botsearch.conf.j2"
+  notify:
+    - reload fail2ban
+
+- name: create a modified application abuse filter
+  template:
+    dest: "/etc/fail2ban/filter.d/application-abuse.conf"
+    src: "filter-application-abuse.conf.j2"
+  notify:
+    - reload fail2ban
+
+
+## This is awkward. The logpath initial value has our friendly multi-line ini file value,
+## which we need to remove, but can't using the standard basic ansible logic.
+
+- name: remove blank line apache log references for all jails
+  lineinfile:
+    dest: /etc/fail2ban/jail.local
+    regexp: '^\s+%\(apache_\w+_log\)s'
+    state: absent
+  notify:
+    - reload fail2ban
+
+- name: configure the sshd jail
+  template:
+    dest: "/etc/fail2ban/jail.d/sshd.local"
+    src: "jail-sshd.local.j2"
+  notify:
+    - reload fail2ban
+
+- name: configure the nginx-nohome jail
+  template:
+    dest: "/etc/fail2ban/jail.d/nginx-nohome.local"
+    src: "jail-nginx-nohome.local.j2"
+  notify:
+    - reload fail2ban
+
+- name: configure the nginx-noproxy jail
+  template:
+    dest: "/etc/fail2ban/jail.d/nginx-noproxy.local"
+    src: "jail-nginx-noproxy.local.j2"
+  notify:
+    - reload fail2ban
+
+- name: configure the nginx-noscript jail
+  template:
+    dest: "/etc/fail2ban/jail.d/nginx-noscript.local"
+    src: "jail-nginx-noscript.local.j2"
+  notify:
+    - reload fail2ban
+
+- name: configure the nginx-botsearch jail
+  template:
+    dest: "/etc/fail2ban/jail.d/nginx-botsearch.local"
+    src: "jail-nginx-botsearch.local.j2"
+  notify:
+    - reload fail2ban
+
+- name: configure the nginx-limit-req jail
+  template:
+    dest: "/etc/fail2ban/jail.d/nginx-limit-req.local"
+    src: "jail-nginx-limit-req.local.j2"
+  notify:
+    - reload fail2ban
+
+- name: configure the nginx-card-verification jail
+  template:
+    dest: "/etc/fail2ban/jail.d/nginx-card-verification.local"
+    src: "jail-nginx-card-verification.local.j2"
+  notify:
+    - reload fail2ban
+
+- name: configure the application-abuse jail
+  template:
+    dest: "/etc/fail2ban/jail.d/application-abuse.local"
+    src: "jail-application-abuse.local.j2"
+  notify:
+    - reload fail2ban

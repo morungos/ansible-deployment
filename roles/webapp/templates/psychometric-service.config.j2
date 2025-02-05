@@ -1,0 +1,99 @@
+{
+  "server" : {
+    "port": "3003"
+  },
+  "service": {
+    "bufferSize": 1000
+  },
+  "session": {
+    "web": {
+      "name": "psySid",
+      "expiration": {{ session_timeout }},
+      "cookie": {
+        "secure": true,
+        "httpOnly": true,
+        "maxAge": {{ session_timeout }}
+      },
+      "rolling": true,
+      "proxy": true
+    }
+  },
+  "template": {
+    "url": {
+      "token": "https://{{static_domain}}/do?code=<%= encodeURIComponent(code) %>",
+      "report": "https://{{static_domain}}/reports/<%= encodeURIComponent(uuid) %>",
+      "register": "https://{{psychometric_domain}}/authentication/register?token=<%= encodeURIComponent(token) %>"
+    }
+  },
+  "braintree": {
+    "environment": {{psychometric_braintree_environment | to_json}},
+    "merchant_id": {{psychometric_braintree_merchant_id | to_json}},
+    "private_key": {{psychometric_braintree_private_key | to_json}},
+    "public_key": {{psychometric_braintree_public_key | to_json}},
+    "merchant_account_id": {{psychometric_braintree_merchant_account_id | to_json}}
+  },
+  "database": {
+    "client": {{database_client | to_json}},
+    "connection": {{database_connection | to_json}},
+    "pool": {{database_pool | to_json}}
+  },
+  "captcha": {
+    "key": "{{captcha_key}}",
+    "secret": "{{captcha_secret}}"
+  },
+  "redis": {
+    "expire": 7200,
+    "options": {
+      "name": {{redis_master_name | to_json}},
+{% if redis_sentinel_enabled %}
+      "sentinels": [
+        {% for host in groups['application'] %}{ "host": {{hostvars[inventory_hostname]['ansible_' + private_network_interface]['ipv4']['address'] | to_json}}, "port": {{redis_sentinel_port}} }{% if not loop.last %},{% endif %}{% endfor %}
+      ],
+{% endif %}
+      "password": {{redis_master_password | to_json}}
+    }
+  },
+  "responses": {
+    "file": "{{deployment_directory}}/data/psychometric-responses.dat"
+  },
+  "security": {
+    "token": {
+      "secret": {{security_token_secret | to_json}},
+      "expiry": {
+        "reset": 7200000,
+        "verify": 7200000
+      }
+    }
+  },
+  "mail": {
+    "link_base": {{mail_link_base | to_json}},
+    "primary_base": {{mail_primary_base | to_json}},
+    "settings" : {
+      "views" : {
+        "root" : "{{deployment_directory}}/templates"
+      }
+    },
+    "transport" : {
+      "mailgun" : {
+{% if mailgun_private_key is defined and mailgun_domain is defined %}
+        "auth" : {
+          "api_key" : {{mailgun_private_key | to_json}},
+          "domain" : {{mailgun_domain | to_json}}
+        }
+{% endif %}
+      }
+    },
+    "keys" : {
+{% if mailgun_validation_key is defined %}
+      "mailgun" : {{mailgun_validation_key | to_json}}
+{% endif %}
+    },
+    "sender" : {{mail_sender_email | to_json}},
+    "replyTo" : {{mail_reply_to_email | to_json}},
+    "copy": {{mail_copy_email | to_json}},
+    "contact" : {{mail_contact_email | to_json}}
+  },
+  "http": {
+    "format": ":method :url HTTP/:http-version :status :content-length \":referrer\" \":user-agent\" :response-time"
+  }
+}

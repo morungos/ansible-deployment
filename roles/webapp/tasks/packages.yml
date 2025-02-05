@@ -1,0 +1,49 @@
+---
+- name: install dependencies
+  command: >
+    yarn --production --check-files --json --pure-lockfile --silent --no-progress --network-timeout 100000
+  register: yarn_production
+  changed_when: (yarn_production.stdout_lines | select("search", '"type":"success"') | list | length) == 0
+  args:
+    chdir: "{{deployment_directory}}"
+
+- name: link the common service
+  command: >
+    yarn link --silent --no-progress 
+  args:
+    chdir: "{{deployment_directory}}/common-service"
+
+- name: link the common service
+  command: >
+    yarn link common-service --silent --no-progress 
+  args:
+    chdir: "{{deployment_directory}}"
+
+- name: copy user knexfile
+  template: 
+    src: knexfile.js.j2 
+    dest: "{{deployment_directory}}/{{user_service_directory}}/knexfile.local.js"
+
+- name: copy api log4js configuration
+  template: 
+    src: api-logging.json.j2 
+    dest: "{{deployment_directory}}/{{api_service_directory}}/logging.local.json"
+    validate: 'jsonlint -q %s'
+
+- name: copy user log4js configuration
+  template: 
+    src: user-logging.json.j2 
+    dest: "{{deployment_directory}}/{{user_service_directory}}/logging.local.json"
+    validate: 'jsonlint -q %s'
+
+- name: copy psychometric log4js configuration
+  template: 
+    src: psychometric-logging.json.j2 
+    dest: "{{deployment_directory}}/{{psychometric_service_directory}}/logging.local.json"
+    validate: 'jsonlint -q %s'
+
+- name: copy failure mail script
+  template: 
+    src: unit-status-mail.sh.j2 
+    dest: "{{deployment_directory}}/unit-status-mail.sh" 
+    mode: 0755

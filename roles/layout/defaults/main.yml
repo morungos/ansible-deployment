@@ -1,0 +1,4 @@
+---
+service_user: 'turalt'
+
+service_log_directory: '/var/log/turalt'

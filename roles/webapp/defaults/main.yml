@@ -1,0 +1,51 @@
+---
+node_env: 'production'
+
+mail_other_keys: 
+  mailgun: "{{mailgun_private_key}}"
+
+mail_link_base: "https://{{webapp_domain}}"
+mail_primary_base: "https://{{static_domain}}"
+
+mail_sender_email:
+  name: 'Sender'
+  address: 'xxx@yyy.com'
+mail_reply_to_email:
+  name: 'ReplyTo'
+  address: 'xxx@yyy.com'
+mail_copy_email:
+  name: 'Copy'
+  address: 'xxx@yyy.com'
+mail_contact_email:
+  name: 'Contact'
+  address: 'xxx@yyy.com'
+
+webapp_service_ssh_key_year: '2016'
+
+api_service_config: '/etc/default/{{api_service_name}}.json'
+api_service_file: '{{service_file_directory}}/{{api_service_name}}.service'
+user_service_config: '/etc/default/{{user_service_name}}.json'
+user_service_file: '{{service_file_directory}}/{{user_service_name}}.service'
+psychometric_service_config: '/etc/default/{{psychometric_service_name}}.json'
+psychometric_service_file: '{{service_file_directory}}/{{psychometric_service_name}}.service'
+
+braintree_environment: "Sandbox"
+braintree_merchant_id: "XXX"
+braintree_private_key: "XXX"
+braintree_public_key: "XXX"
+braintree_merchant_account_id: "XXX"
+
+psychometric_braintree_environment: "{{braintree_environment}}"
+psychometric_braintree_merchant_id: "{{braintree_merchant_id}}"
+psychometric_braintree_private_key: "{{braintree_private_key}}"
+psychometric_braintree_public_key: "{{braintree_public_key}}"
+psychometric_braintree_merchant_account_id: "{{braintree_merchant_account_id}}"
+
+captcha_key: "6LfJtlgUAAAAAHn8yRbg-z50S-iog7ED7ooPz4Gl"
+captcha_secret: "XXX"
+
+security_token_secret: "b1da4dd6-f714-4986-94a7-c4c2b23b1af0"
+
+session_timeout: "{{ 1 * 60 * 60 * 1000 }}"
+
+invite_signature: "test"

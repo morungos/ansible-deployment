@@ -1,0 +1,16 @@
+---
+fail2ban_ban_time: 604800
+fail2ban_find_time: 43200
+fail2ban_max_retry: 5
+fail2ban_ignore_ips: ''
+fail2ban_ignoreip: '127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 {{ fail2ban_ignore_ips }}'
+
+fail2ban_sshd_max_retry: 5
+
+fail2ban_http_ban_time: 604800
+fail2ban_http_find_time: 43200
+fail2ban_http_max_retry: 5
+
+fail2ban_card_verification_ban_time: -1
+fail2ban_card_verification_find_time: 43200
+fail2ban_card_verification_max_retry: 5

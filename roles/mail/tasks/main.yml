@@ -1,0 +1,53 @@
+---
+- name: set postfix defaults
+  debconf:
+    name: 'postfix'
+    question: '{{item.question}}'
+    value: '{{item.value}}'
+    vtype: '{{item.type}}'
+  with_items:
+    - {question: 'postfix/mailname', value: '{{ ansible_hostname }}', type: 'string'}
+    - {question: 'postfix/main_mailer_type', value: 'Internet Site', type: 'select'}
+    - {question: 'postfix/destinations', value: '{{ ansible_hostname }}, localhost.localdomain, localhost', type: 'string'}
+
+- name: remove exim
+  apt:
+    name: 
+      - exim4
+    state: absent
+    autoremove: yes
+
+- name: install
+  apt:
+    name:
+      - postfix
+    update_cache: yes
+    cache_valid_time: 3600
+    state: present
+
+- name: configure as a null client
+  lineinfile:
+    dest: /etc/postfix/main.cf
+    regexp: "{{item.pattern}}"
+    line: "{{item.line}}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - {pattern: '^myhostname\s*=', line: 'myhostname = {{ ansible_fqdn }}'}
+    - {pattern: '^mynetworks\s*=', line: 'mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128'}
+    - {pattern: '^inet_interfaces\s*=', line: 'inet_interfaces = loopback-only'}
+    - {pattern: '^mydestination\s*=', line: 'mydestination ='}
+    - {pattern: '^inet_protocols\s*=', line: 'inet_protocols = ipv4'}
+    - {pattern: '^virtual_alias_domains\s*=', line: 'virtual_alias_domains = ap1.meetomatic.com, ap1'}
+    - {pattern: '^virtual_alias_maps\s*=', line: 'virtual_alias_maps = hash:/etc/postfix/virtual'}
+  notify:
+    - restart postfix
+
+- name: set up forwarding
+  lineinfile:
+    dest: /etc/aliases
+    regexp: "^root:"
+    line: "root: {{ mail_notification_delegate }}"
+  notify:
+    - rebuild aliases

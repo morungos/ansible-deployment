@@ -1,0 +1,9 @@
+[nginx-nohome]
+
+enabled = true
+filter = nginx-nohome
+port = http,https
+logpath = %(nginx_access_log)s
+findtime = {{fail2ban_http_find_time}}
+bantime = {{fail2ban_http_ban_time}}
+maxretry = {{fail2ban_http_max_retry}}

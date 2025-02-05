@@ -1,0 +1,57 @@
+---
+target_name: 'turalt'
+api_service_name: 'turalt-api'
+user_service_name: 'turalt-user'
+psychometric_service_name: 'turalt-psychometric'
+service_user: '{{target_name}}'
+
+static_domain: 'static.turalt.com'
+static_additional_domains: []
+webapp_domain: 'brutus.turalt.com'
+webapp_additional_domains: []
+admin_domain: 'admin.brutus.turalt.com'
+admin_additional_domains: []
+psychometric_domain: 'psychometric.brutus.turalt.com'
+psychometric_additional_domains: []
+
+api_service_directory: 'api-service'
+user_service_directory: 'user-service'
+psychometric_service_directory: 'psychometric-service'
+
+service_file_directory: '/usr/lib/systemd/system'
+
+deployment_directory: '/usr/lib/{{target_name}}'
+service_directory: '{{deployment_directory}}/service'
+service_log_directory: '/var/log/{{target_name}}'
+
+private_network_interface: 'eth1'
+public_network_interface: 'eth0'
+
+postfix_server_domain: '{{ansible_hostname}}'
+mail_notification_delegate: 'admin@{{postfix_server_domain}}'
+
+redis_master_name: 'master1'
+redis_master_password: '5a538c1b3dc3'
+redis_port: 6379
+redis_sentinel_port: 26379
+redis_sentinel_enabled: true
+
+database_application_db: 'turalt'
+database_application_user: 'turalt'
+database_application_password: '9cd8-172cca7cc0f7'
+
+database_client: 'pg'
+database_connection:
+  database: '{{ database_application_db }}'
+  user: '{{ database_application_user }}'
+  password: '{{ database_application_password }}'
+  host: "127.0.0.1"
+database_pool:
+  min: 2
+  max: 10
+
+postgres_root_user: 'admin'
+postgres_root_password: '906d-19b105abc08a'
+
+aggregate_log_name: 'production.log'
+http_log_name: 'http.log'

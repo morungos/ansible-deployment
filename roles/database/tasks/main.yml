@@ -1,0 +1,37 @@
+---
+- name: install postgresql
+  apt:
+    name: 
+      - postgresql
+      - python3-psycopg2
+    update_cache: yes
+  notify:
+    - enable postgresql
+
+- name: create a superuser postgresql database user
+  become: yes
+  become_user: postgres
+  community.general.postgresql_user:
+    name: '{{ postgres_root_user }}'
+    password: '{{ postgres_root_password }}'
+    role_attr_flags: CREATEDB,SUPERUSER,CREATEROLE
+    encrypted: yes
+    state: present
+
+- name: create the database
+  become: true
+  become_user: postgres
+  postgresql_db: 
+    name: '{{ database_application_db }}'
+    template: 'template0'
+    state: present
+
+- name: ensure user has access to the new database
+  become: true
+  become_user: postgres
+  postgresql_user: 
+    db: '{{ database_application_db }}'
+    name: '{{ database_application_user }}'
+    password: '{{ database_application_password }}'
+    priv: 'ALL'
+    state: 'present'

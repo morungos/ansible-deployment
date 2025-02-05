@@ -1,0 +1,67 @@
+---
+- name: install rsyslog and rsyslog-relp
+  apt:
+    name:
+      - rsyslog
+    update_cache: yes
+    cache_valid_time: 3600
+    state: present
+
+- name: get the server name
+  command: hostname
+  register: syslog_hostname_data
+
+- name: set the hostname
+  lineinfile:
+    dest: /etc/rsyslog.conf
+    regexp: '^\$LocalHostName\b'
+    line: '$LocalHostName {{syslog_hostname_data.stdout}}'
+    state: "present"
+    create: no
+    insertbefore: 'BOF'
+  notify:
+    - restart rsyslog
+
+- name: enable high precision timestamps
+  lineinfile:
+    dest: /etc/rsyslog.conf
+    regexp: '^(\$ActionFileDefaultTemplate\b.*)'
+    line: '# \1'
+    backrefs: yes
+    state: "present"
+  notify:
+    - restart rsyslogd
+
+- name: create log directory
+  file:
+    dest: '{{ service_log_directory }}'
+    state: directory
+    owner: 'root'
+    group: adm
+    mode: '0755'
+
+- name: create stub http log file if needed
+  file:
+    path: "{{ service_log_directory }}/{{ http_log_name }}"
+    state: file
+    mode: '0644'
+
+- name: create stub production log file if needed
+  file:
+    path: "{{ service_log_directory }}/{{ aggregate_log_name }}"
+    state: file
+    mode: '0644'
+
+- name: write the aggregator
+  template:
+    src: 00-log-aggregator.conf.j2
+    dest: /etc/rsyslog.d/00-log-aggregator.conf
+    validate: /usr/sbin/rsyslogd -f %s -N1
+  notify:
+    - restart rsyslogd
+
+- name: add a rule to logrotate
+  template:
+    src: rsyslog_aggregator.j2
+    dest: /etc/logrotate.d/rsyslog_aggregator
+

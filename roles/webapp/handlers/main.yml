@@ -1,0 +1,10 @@
+---
+# file: roles/webapp/handlers/main.yml
+- name: restart user service
+  service: name={{user_service_name}} state=restarted
+
+- name: restart api service
+  service: name={{api_service_name}} state=restarted
+
+- name: restart psychometric service
+  service: name={{psychometric_service_name}} state=restarted

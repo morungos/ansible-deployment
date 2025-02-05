@@ -1,0 +1,47 @@
+---
+- name: remove 127.0.1.1 from /etc/hosts
+  lineinfile:
+    dest: "/etc/hosts"
+    state: absent
+    regexp: "^127.0.1.1"
+
+- name: ensure we have nftables setup
+  apt:
+    name: 
+      - nftables
+    update_cache: yes 
+    cache_valid_time: 3600 
+    state: present
+  register: installed_nftables
+
+- name: select nftables if needed
+  command: "{{update_command}}"
+  loop: 
+    - "update-alternatives --set iptables /usr/sbin/iptables-nft"
+    - "update-alternatives --set ip6tables /usr/sbin/ip6tables-nft"
+    - "update-alternatives --set arptables /usr/sbin/arptables-nft"
+    - "update-alternatives --set ebtables /usr/sbin/ebtables-nft"
+  loop_control:
+    loop_var: update_command
+  when:
+    - installed_nftables.changed
+
+- name: ensure nftables extras directory exists
+  file:
+    path: '/etc/nftables.d'
+    state: directory
+
+- name: copy nftables configuration
+  template:
+    src: "nft-ip.conf.j2"
+    dest: "/etc/nftables.d/ip.conf"
+  register: nftables_ip_rules_written
+
+- name: add nftables include if required
+  lineinfile:
+    dest: /etc/nftables.conf
+    regexp: '^include "/etc/nftables\.d/ip\.conf"'
+    line: 'include "/etc/nftables.d/ip.conf"'
+    insertafter: EOF
+  notify:
+    - reload nftables ip rules
